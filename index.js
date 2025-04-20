@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import http from "node:http";
-
+import url from "url";
 import path from "path";
+
+import slugify from "slugify";
+
+import { replaceTemplate } from "./modules/replaceTemplate.js";
 const __dirname = path.resolve();
 
 //Blocking synchronus way
@@ -32,21 +36,6 @@ console.log("File Written");
 //SECTION SERVER
 const server = http.createServer();
 
-const replaceTemplate = (temp, product) => {
-  let output = temp.replaceAll("{%PRODUCTNAME%}", product.productName);
-  output = output.replaceAll("{%IMAGE%}", product.image);
-  output = output.replaceAll("{%PRICE%}", product.price);
-  output = output.replaceAll("{%FROM%}", product.from);
-  output = output.replaceAll("{%NUTRIENTS%}", product.nutrients);
-  output = output.replaceAll("{%QUANTITY%}", product.quantity);
-  output = output.replaceAll("{%DESCRIPTION%}", product.description);
-  output = output.replaceAll("{%ID%}", product.id);
-
-  if (!product.organic) output = output.replaceAll("{%NOT_ORGANIC%}", "not-organic");
-
-  return output;
-};
-
 const data = fs.readFileSync(`${__dirname}/dev-data/data.json`, "utf-8");
 const overviewTemplate = fs.readFileSync(`${__dirname}/templates/overview.html`, "utf-8");
 const productTemplate = fs.readFileSync(`${__dirname}/templates/product.html`, "utf-8");
@@ -54,9 +43,11 @@ const cardTemplate = fs.readFileSync(`${__dirname}/templates/templete-card.html`
 
 const dataObj = JSON.parse(data);
 
+const slugs = dataObj.map((el) => slugify(el.productName, { lower: true }));
+
 // Listen to the request event
 server.on("request", (request, res) => {
-  const pathName = request.url;
+  const { query, pathname: pathName } = url.parse(request.url, true);
 
   if (pathName === "/overview" || pathName === "/") {
     res.writeHead(200, { "content-type": "text/html" });
@@ -67,11 +58,14 @@ server.on("request", (request, res) => {
       })
       .join("");
     const output = overviewTemplate.replace("{%PRODUCT_CARDS%}", cardsHtml);
-    console.log(output);
+
     res.end(output);
   } else if (pathName === "/product") {
-    res.writeHead(200, { "content-type": "text/html" });
-    res.end(productTemplate);
+    const product = dataObj[query.id];
+
+    const output = replaceTemplate(productTemplate, product);
+
+    res.end(output);
   } else if (pathName === "/api") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(data);
